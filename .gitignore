@@ -67,6 +67,9 @@ storage/clips/*
 *.log
 logs/
 
+# PID files
+.pids/
+
 # OS
 .DS_Store
 Thumbs.db

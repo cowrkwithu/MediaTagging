@@ -377,7 +377,7 @@ function SearchPageContent() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">
-              검색 결과 (동영상 {searchResults.total_videos}건, 사진 {searchResults.total_images}건, 장면 {searchResults.total_scenes}건)
+              검색 결과 (동영상 {searchResults.total_videos}건, 장면 {searchResults.total_scenes}건, 사진 {searchResults.total_images}건)
             </h2>
             <button
               onClick={() => {
@@ -427,6 +427,38 @@ function SearchPageContent() {
             </div>
           )}
 
+          {searchResults.scenes.length > 0 && (
+            <div>
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <Film className="w-4 h-4" />
+                장면 ({searchResults.scenes.length})
+              </h3>
+              <div className="space-y-2">
+                {searchResults.scenes.map((scene) => (
+                  <Link
+                    key={scene.id}
+                    href={`/videos/${scene.video_id}?scene=${scene.id}`}
+                    className="block p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{scene.video_filename}</span>
+                      <span className="text-sm text-gray-500">
+                        {scene.start_time.toFixed(1)}s - {scene.end_time.toFixed(1)}s
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {scene.tags.map((tag: string) => (
+                        <span key={tag} className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           {searchResults.images && searchResults.images.length > 0 && (
             <div>
               <h3 className="font-medium mb-2 flex items-center gap-2">
@@ -465,38 +497,6 @@ function SearchPageContent() {
                           <span className="text-xs text-gray-500">+{image.tags.length - 3}</span>
                         )}
                       </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {searchResults.scenes.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 flex items-center gap-2">
-                <Film className="w-4 h-4" />
-                장면 ({searchResults.scenes.length})
-              </h3>
-              <div className="space-y-2">
-                {searchResults.scenes.map((scene) => (
-                  <Link
-                    key={scene.id}
-                    href={`/videos/${scene.video_id}?scene=${scene.id}`}
-                    className="block p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{scene.video_filename}</span>
-                      <span className="text-sm text-gray-500">
-                        {scene.start_time.toFixed(1)}s - {scene.end_time.toFixed(1)}s
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {scene.tags.map((tag: string) => (
-                        <span key={tag} className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">
-                          {tag}
-                        </span>
-                      ))}
                     </div>
                   </Link>
                 ))}
