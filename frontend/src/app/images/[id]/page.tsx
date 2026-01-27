@@ -36,6 +36,7 @@ export default function ImageDetailPage() {
   useEffect(() => {
     if (statusData?.status === 'tagged' && image?.status === 'processing') {
       queryClient.invalidateQueries({ queryKey: ['image', imageId] });
+      queryClient.invalidateQueries({ queryKey: ['images'] }); // 목록도 갱신
     }
   }, [statusData?.status, image?.status, queryClient, imageId]);
 

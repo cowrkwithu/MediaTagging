@@ -77,6 +77,8 @@ export default function ImagesPage() {
   const { data: images, isLoading, error } = useQuery({
     queryKey: ['images'],
     queryFn: getImages,
+    staleTime: 0, // 항상 최신 데이터 확인
+    refetchOnMount: 'always', // 페이지 마운트 시 항상 refetch
   });
 
   if (isLoading) {

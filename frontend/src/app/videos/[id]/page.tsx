@@ -65,6 +65,7 @@ export default function VideoDetailPage() {
   useEffect(() => {
     if (statusData?.status === 'tagged' && video?.status === 'processing') {
       queryClient.invalidateQueries({ queryKey: ['video', videoId] });
+      queryClient.invalidateQueries({ queryKey: ['videos'] }); // 목록도 갱신
       refetchScenes();
     }
   }, [statusData?.status, video?.status, queryClient, videoId, refetchScenes]);

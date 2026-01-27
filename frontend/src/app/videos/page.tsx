@@ -73,6 +73,8 @@ export default function VideosPage() {
   const { data: videos, isLoading, error } = useQuery({
     queryKey: ['videos'],
     queryFn: getVideos,
+    staleTime: 0, // 항상 최신 데이터 확인
+    refetchOnMount: 'always', // 페이지 마운트 시 항상 refetch
   });
 
   if (isLoading) {
