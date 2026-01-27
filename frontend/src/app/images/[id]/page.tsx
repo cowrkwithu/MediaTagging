@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Tag as TagIcon, Trash2, Edit2, Save, X, Download } from 'lucide-react';
 import Link from 'next/link';
-import { getImage, startImageTagging, deleteImage, updateImage, getImageTaggingStatus } from '@/lib/api';
+import { getImage, startImageTagging, deleteImage, updateImage, getImageTaggingStatus, deleteImageTag } from '@/lib/api';
 import ProcessingStatus from '@/components/ProcessingStatus';
 
 export default function ImageDetailPage() {
@@ -16,6 +16,8 @@ export default function ImageDetailPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editDescription, setEditDescription] = useState('');
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [userTagsInput, setUserTagsInput] = useState('');
 
@@ -55,12 +57,27 @@ export default function ImageDetailPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: { title?: string; user_notes?: string }) => updateImage(imageId, data),
+    mutationFn: (data: { title?: string; description?: string; user_notes?: string }) => updateImage(imageId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['image', imageId] });
       setIsEditing(false);
+      setIsEditingDescription(false);
     },
   });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: ({ imageId, tagId }: { imageId: string; tagId: string }) =>
+      deleteImageTag(imageId, tagId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['image', imageId] });
+    },
+  });
+
+  const handleDeleteTag = (tagId: string) => {
+    if (confirm('이 태그를 삭제하시겠습니까?')) {
+      deleteTagMutation.mutate({ imageId, tagId });
+    }
+  };
 
   const handleStartEdit = () => {
     setEditTitle(image?.title || '');
@@ -71,6 +88,22 @@ export default function ImageDetailPage() {
     updateMutation.mutate({
       title: editTitle || undefined,
     });
+  };
+
+  const handleStartEditDescription = () => {
+    setEditDescription(image?.description || '');
+    setIsEditingDescription(true);
+  };
+
+  const handleSaveDescription = () => {
+    updateMutation.mutate({
+      description: editDescription || undefined,
+    });
+  };
+
+  const handleCancelEditDescription = () => {
+    setEditDescription(image?.description || '');
+    setIsEditingDescription(false);
   };
 
   const handleStartEditTags = () => {
@@ -116,9 +149,12 @@ export default function ImageDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/images" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
+        <button
+          onClick={() => router.back()}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+        >
           <ArrowLeft className="w-5 h-5" />
-        </Link>
+        </button>
         <h1 className="text-2xl font-bold flex-1">
           {isEditing ? (
             <input
@@ -178,49 +214,39 @@ export default function ImageDetailPage() {
             />
           </div>
 
-          {image.description && (
-            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <h3 className="font-medium mb-2">AI 설명</h3>
-              <p className="text-gray-600 dark:text-gray-400">{image.description}</p>
-            </div>
-          )}
-
-          <div className="p-4 border rounded-lg">
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-medium">사용자 정의 태그</h3>
-              {!isEditingTags && (
+              <h3 className="font-medium">AI 설명</h3>
+              {!isEditingDescription && (
                 <button
-                  onClick={handleStartEditTags}
+                  onClick={handleStartEditDescription}
                   className="text-sm text-blue-600 hover:text-blue-700"
                 >
                   편집
                 </button>
               )}
             </div>
-            {isEditingTags ? (
-              <div className="space-y-3">
+            {isEditingDescription ? (
+              <div className="space-y-2">
                 <textarea
-                  value={userTagsInput}
-                  onChange={(e) => setUserTagsInput(e.target.value)}
-                  placeholder="#태그1 #태그2 형식으로 입력하세요"
-                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="사진 설명을 입력하세요"
+                  rows={4}
                   className="w-full px-3 py-2 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   autoFocus
                 />
-                <p className="text-xs text-gray-500">
-                  #단어 형식으로 입력하면 태그로 추가됩니다
-                </p>
                 <div className="flex gap-2">
                   <button
-                    onClick={handleSaveTags}
+                    onClick={handleSaveDescription}
                     disabled={updateMutation.isPending}
                     className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
                     {updateMutation.isPending ? '저장 중...' : '저장'}
                   </button>
                   <button
-                    onClick={handleCancelEditTags}
-                    className="py-2 px-4 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    onClick={handleCancelEditDescription}
+                    className="py-2 px-4 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     취소
                   </button>
@@ -228,15 +254,13 @@ export default function ImageDetailPage() {
               </div>
             ) : (
               <div
-                onClick={handleStartEditTags}
-                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded p-2 -m-2 transition-colors"
+                onClick={handleStartEditDescription}
+                className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded p-2 -m-2 transition-colors"
               >
-                {image.user_notes ? (
-                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
-                    {image.user_notes}
-                  </p>
+                {image.description ? (
+                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{image.description}</p>
                 ) : (
-                  <p className="text-gray-400 text-sm">클릭하여 태그를 추가하세요</p>
+                  <p className="text-gray-400 text-sm">클릭하여 설명을 추가하세요</p>
                 )}
               </div>
             )}
@@ -302,7 +326,7 @@ export default function ImageDetailPage() {
                 {image.tags.map((tag) => (
                   <span
                     key={tag.id}
-                    className={`px-2 py-1 text-xs rounded-full ${
+                    className={`group inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${
                       tag.confidence === 1.0
                         ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
                         : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
@@ -311,12 +335,57 @@ export default function ImageDetailPage() {
                   >
                     {tag.confidence === 1.0 && <span className="mr-0.5">#</span>}
                     {tag.name}
+                    <button
+                      onClick={() => handleDeleteTag(tag.id)}
+                      className="ml-0.5 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                      title="태그 삭제"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </span>
                 ))}
               </div>
             ) : (
               <p className="text-sm text-gray-500">태그가 없습니다.</p>
             )}
+
+            {/* Add Tags */}
+            <div className="pt-3 mt-3 border-t">
+              {isEditingTags ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={userTagsInput}
+                    onChange={(e) => setUserTagsInput(e.target.value)}
+                    placeholder="#태그1 #태그2 형식으로 입력"
+                    rows={2}
+                    className="w-full px-2 py-1 text-sm border rounded resize-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    autoFocus
+                  />
+                  <div className="flex gap-1">
+                    <button
+                      onClick={handleSaveTags}
+                      disabled={updateMutation.isPending}
+                      className="flex-1 py-1 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50"
+                    >
+                      {updateMutation.isPending ? '저장 중...' : '추가'}
+                    </button>
+                    <button
+                      onClick={handleCancelEditTags}
+                      className="py-1 px-2 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStartEditTags}
+                  className="w-full py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                >
+                  + 태그 추가
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

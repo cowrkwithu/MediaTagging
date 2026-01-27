@@ -23,5 +23,5 @@ class Video(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    scenes = relationship("Scene", back_populates="video", cascade="all, delete-orphan")
+    scenes = relationship("Scene", back_populates="video", cascade="all, delete-orphan", order_by="Scene.start_time")
     tags = relationship("VideoTag", back_populates="video", cascade="all, delete-orphan")

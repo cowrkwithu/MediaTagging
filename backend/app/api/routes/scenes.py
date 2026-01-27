@@ -34,11 +34,16 @@ class SceneDetailResponse(BaseModel):
     duration: float
     thumbnail_path: Optional[str]
     clip_path: Optional[str]
+    user_notes: Optional[str]
     tags: List[SceneTagResponse]
     created_at: str
 
     class Config:
         from_attributes = True
+
+
+class SceneUpdate(BaseModel):
+    user_notes: Optional[str] = None
 
 
 @router.get("/{scene_id}", response_model=SceneDetailResponse)
@@ -64,9 +69,108 @@ async def get_scene(scene_id: UUID, db: Session = Depends(get_db)):
         duration=scene.end_time - scene.start_time,
         thumbnail_path=scene.thumbnail_path,
         clip_path=scene.clip_path,
+        user_notes=scene.user_notes,
         tags=[SceneTagResponse(id=str(t.id), name=t.name) for t in scene_tags],
         created_at=scene.created_at.isoformat()
     )
+
+
+def parse_hashtags(text: str) -> list[str]:
+    """Extract hashtags from text"""
+    import re
+    # Match #word patterns (supports Korean, English, numbers)
+    pattern = r'#([\w가-힣]+)'
+    matches = re.findall(pattern, text)
+    return list(set(matches))  # Remove duplicates
+
+
+def add_scene_user_tags(scene_id: UUID, tag_names: list[str], db: Session) -> None:
+    """Add user-defined tags to a scene"""
+    for tag_name in tag_names:
+        tag_name = tag_name.strip()
+        if not tag_name:
+            continue
+
+        # Find or create tag
+        tag = db.query(Tag).filter(Tag.name == tag_name).first()
+        if not tag:
+            tag = Tag(name=tag_name)
+            db.add(tag)
+            db.flush()
+
+        # Add to scene tags if not exists
+        existing_scene_tag = db.query(SceneTag).filter(
+            SceneTag.scene_id == scene_id,
+            SceneTag.tag_id == tag.id
+        ).first()
+
+        if not existing_scene_tag:
+            scene_tag = SceneTag(scene_id=scene_id, tag_id=tag.id, confidence=1.0)
+            db.add(scene_tag)
+
+
+@router.put("/{scene_id}", response_model=SceneDetailResponse)
+async def update_scene(scene_id: UUID, scene_update: SceneUpdate, db: Session = Depends(get_db)):
+    """Update scene metadata and parse user-defined tags"""
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    video = db.query(Video).filter(Video.id == scene.video_id).first()
+
+    # Update user_notes
+    if scene_update.user_notes is not None:
+        scene.user_notes = scene_update.user_notes
+
+        # Parse and add hashtags as tags
+        if scene.user_notes:
+            hashtags = parse_hashtags(scene.user_notes)
+            if hashtags:
+                add_scene_user_tags(scene.id, hashtags, db)
+
+    db.commit()
+    db.refresh(scene)
+
+    # Get tags for this scene
+    scene_tags = db.query(Tag).join(SceneTag).filter(
+        SceneTag.scene_id == scene.id
+    ).all()
+
+    return SceneDetailResponse(
+        id=str(scene.id),
+        video_id=str(scene.video_id),
+        video_filename=video.filename if video else "Unknown",
+        start_time=scene.start_time,
+        end_time=scene.end_time,
+        duration=scene.end_time - scene.start_time,
+        thumbnail_path=scene.thumbnail_path,
+        clip_path=scene.clip_path,
+        user_notes=scene.user_notes,
+        tags=[SceneTagResponse(id=str(t.id), name=t.name) for t in scene_tags],
+        created_at=scene.created_at.isoformat()
+    )
+
+
+@router.delete("/{scene_id}/tags/{tag_id}")
+async def delete_scene_tag(scene_id: UUID, tag_id: UUID, db: Session = Depends(get_db)):
+    """Delete a tag from a scene"""
+    scene = db.query(Scene).filter(Scene.id == scene_id).first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    # Find and delete the scene-tag association
+    scene_tag = db.query(SceneTag).filter(
+        SceneTag.scene_id == scene_id,
+        SceneTag.tag_id == tag_id
+    ).first()
+
+    if not scene_tag:
+        raise HTTPException(status_code=404, detail="Tag not found for this scene")
+
+    db.delete(scene_tag)
+    db.commit()
+
+    return {"message": "Tag deleted", "scene_id": str(scene_id), "tag_id": str(tag_id)}
 
 
 @router.get("/{scene_id}/download")

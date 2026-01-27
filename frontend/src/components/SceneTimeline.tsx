@@ -12,6 +12,7 @@ interface SceneTimelineProps {
   scenes: Scene[];
   duration: number;
   currentTime: number;
+  selectedSceneId?: string | null;
   onSceneClick: (scene: Scene) => void;
 }
 
@@ -31,6 +32,7 @@ export default function SceneTimeline({
   scenes,
   duration,
   currentTime,
+  selectedSceneId,
   onSceneClick,
 }: SceneTimelineProps) {
   const currentPosition = useMemo(() => {
@@ -38,11 +40,18 @@ export default function SceneTimeline({
     return (currentTime / duration) * 100;
   }, [currentTime, duration]);
 
+  // Use selectedSceneId if available, otherwise fall back to currentTime-based detection
   const currentScene = useMemo(() => {
+    // If a scene is explicitly selected, use that
+    if (selectedSceneId) {
+      const selected = scenes.find((scene) => scene.id === selectedSceneId);
+      if (selected) return selected;
+    }
+    // Fall back to currentTime-based detection
     return scenes.find(
       (scene) => currentTime >= scene.start_time && currentTime < scene.end_time
     );
-  }, [scenes, currentTime]);
+  }, [scenes, currentTime, selectedSceneId]);
 
   if (scenes.length === 0 || duration === 0) {
     return null;

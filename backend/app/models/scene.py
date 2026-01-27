@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -16,6 +16,7 @@ class Scene(Base):
     end_time = Column(Float, nullable=False)  # seconds
     thumbnail_path = Column(String(1000))
     clip_path = Column(String(1000))
+    user_notes = Column(Text)  # User-defined tags in #tag format
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships

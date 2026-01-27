@@ -39,10 +39,20 @@ MediaTagging은 동영상과 사진을 업로드하고 AI(Ollama)를 활용하�
 - 장면 클릭 시 해당 위치로 이동
 - 개별 장면 다운로드
 - 여러 장면 병합 내보내기
+- 장면별 사용자 메모 및 태그 추가
 
 ### 5. 사용자 정의 태그
 - `#태그` 형식으로 직접 태그 추가
 - AI 태그와 사용자 태그 구분 표시
+- 동영상, 사진, 장면 각각에 사용자 태그 추가 가능
+
+### 6. 태그 관리
+- AI 태그 및 사용자 태그 개별 삭제 기능
+- 동영상, 사진, 장면 모두 태그 삭제 지원
+
+### 7. 검색 결과 네비게이션
+- 검색 결과에서 장면 클릭 시 해당 동영상의 장면으로 바로 이동
+- 뒤로가기 시 검색 결과 자동 복원 (URL 기반 상태 관리)
 
 ## 시스템 아키텍처
 
@@ -177,14 +187,18 @@ mediaTagging/
 | PUT | /{id} | 수정 |
 | DELETE | /{id} | 삭제 |
 | POST | /{id}/tagging/start | 태깅 시작 |
+| GET | /{id}/tagging/status | 태깅 상태 |
 | GET | /{id}/file | 원본 다운로드 |
 | GET | /{id}/thumbnail | 썸네일 |
+| DELETE | /{id}/tags/{tag_id} | 태그 삭제 |
 
 ### 장면 (/api/scenes)
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | GET | /{id} | 상세 조회 |
+| PUT | /{id} | 장면 수정 (user_notes) |
 | GET | /{id}/download | 클립 다운로드 |
+| DELETE | /{id}/tags/{tag_id} | 태그 삭제 |
 | POST | /export | 병합 내보내기 |
 
 ### 검색 (/api/search)
@@ -198,11 +212,11 @@ mediaTagging/
 ### 주요 테이블
 - **videos**: 동영상 메타데이터
 - **images**: 사진 메타데이터
-- **scenes**: 동영상 장면 정보
+- **scenes**: 동영상 장면 정보 (user_notes 포함)
 - **tags**: 태그 목록
-- **video_tags**: 동영상-태그 연결
-- **scene_tags**: 장면-태그 연결
-- **image_tags**: 사진-태그 연결
+- **video_tags**: 동영상-태그 연결 (confidence로 AI/사용자 태그 구분)
+- **scene_tags**: 장면-태그 연결 (confidence로 AI/사용자 태그 구분)
+- **image_tags**: 사진-태그 연결 (confidence로 AI/사용자 태그 구분)
 
 ## 설치 및 실행
 
@@ -278,6 +292,14 @@ DEBUG=True
     → AI 설명 생성
     → AI 태그 생성 (5-15개)
     → 완료 (status: tagged)
+```
+
+### 검색 및 네비게이션
+```
+태그 검색 (AND/OR/NOT)
+    → 검색 결과 (동영상, 사진, 장면)
+    → 장면 클릭 시 → 해당 동영상 상세 페이지 + 장면 자동 선택
+    → 뒤로가기 시 → 검색 결과 자동 복원 (URL 파라미터 기반)
 ```
 
 ## 라이선스

@@ -104,6 +104,9 @@ class TaggingService:
                 duration = video.duration or self.processor.get_duration(video.file_path)
                 scene_times = [(0.0, duration)]
 
+            # Sort scenes by start_time to ensure chronological order
+            scene_times.sort(key=lambda x: x[0])
+
             print(f"Detected {len(scene_times)} scenes in video {video_id}")
 
             created_scenes = []

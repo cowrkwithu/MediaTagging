@@ -28,6 +28,7 @@ export interface Scene {
   end_time: number;
   thumbnail_path: string | null;
   clip_path: string | null;
+  user_notes: string | null;
   created_at: string;
   tags?: Tag[];
 }

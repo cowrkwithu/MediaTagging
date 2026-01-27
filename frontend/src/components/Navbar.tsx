@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Video, Upload, Search, Home, Menu, X, Image } from 'lucide-react';
+import { Video, Upload, Search, Home, Menu, X, Image, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { href: '/videos', label: '동영상', icon: Video },
   { href: '/images', label: '사진', icon: Image },
   { href: '/search', label: '검색', icon: Search },
+  { href: '/help', label: '사용설명', icon: HelpCircle },
 ];
 
 export function Navbar() {

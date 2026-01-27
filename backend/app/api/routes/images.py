@@ -199,6 +199,8 @@ async def update_image(image_id: UUID, data: dict, db: Session = Depends(get_db)
 
     if "title" in data:
         image.title = data["title"]
+    if "description" in data:
+        image.description = data["description"]
     if "user_notes" in data:
         image.user_notes = data["user_notes"]
 
@@ -231,6 +233,28 @@ async def delete_image(image_id: UUID, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Image deleted", "image_id": str(image_id)}
+
+
+@router.delete("/{image_id}/tags/{tag_id}")
+async def delete_image_tag(image_id: UUID, tag_id: UUID, db: Session = Depends(get_db)):
+    """Delete a tag from an image"""
+    image = db.query(Image).filter(Image.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    # Find and delete the image-tag association
+    image_tag = db.query(ImageTag).filter(
+        ImageTag.image_id == image_id,
+        ImageTag.tag_id == tag_id
+    ).first()
+
+    if not image_tag:
+        raise HTTPException(status_code=404, detail="Tag not found for this image")
+
+    db.delete(image_tag)
+    db.commit()
+
+    return {"message": "Tag deleted", "image_id": str(image_id), "tag_id": str(tag_id)}
 
 
 @router.post("/{image_id}/tagging/start")

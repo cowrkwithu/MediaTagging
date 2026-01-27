@@ -11,6 +11,7 @@ class VideoCreate(BaseModel):
 
 class VideoUpdate(BaseModel):
     title: Optional[str] = None
+    summary: Optional[str] = None
     user_notes: Optional[str] = None
 
 

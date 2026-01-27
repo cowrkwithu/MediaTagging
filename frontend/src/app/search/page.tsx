@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, Video, Film, Tag, X, Image } from 'lucide-react';
 import Link from 'next/link';
 import { search, getTags } from '@/lib/api';
-import type { SearchQuery, SearchResult } from '@/types';
+import type { SearchQuery } from '@/types';
 
-export default function SearchPage() {
+function SearchPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [andTags, setAndTags] = useState<string[]>([]);
   const [orTags, setOrTags] = useState<string[]>([]);
   const [notTags, setNotTags] = useState<string[]>([]);
@@ -19,9 +23,56 @@ export default function SearchPage() {
     queryFn: getTags,
   });
 
-  const searchMutation = useMutation({
-    mutationFn: (query: SearchQuery) => search(query),
+  // Get search params from URL
+  const andParam = searchParams.get('and');
+  const orParam = searchParams.get('or');
+  const notParam = searchParams.get('not');
+
+  // Parse URL params into arrays
+  const urlAndTags = andParam ? andParam.split(',').filter(t => t) : [];
+  const urlOrTags = orParam ? orParam.split(',').filter(t => t) : [];
+  const urlNotTags = notParam ? notParam.split(',').filter(t => t) : [];
+
+  // Create search query from URL params
+  const hasUrlParams = urlAndTags.length > 0 || urlOrTags.length > 0 || urlNotTags.length > 0;
+
+  // Use useQuery for search - results are automatically cached by query key
+  const { data: searchResults, isLoading: searchLoading } = useQuery({
+    queryKey: ['search', andParam, orParam, notParam],
+    queryFn: async () => {
+      const query: SearchQuery = {
+        target: ['videos', 'scenes', 'images'],
+        page: 1,
+        limit: 20,
+      };
+      if (urlAndTags.length > 0) query.and_tags = urlAndTags;
+      if (urlOrTags.length > 0) query.or_tags = urlOrTags;
+      if (urlNotTags.length > 0) query.not_tags = urlNotTags;
+      return search(query);
+    },
+    enabled: hasUrlParams,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
+
+  // Sync local state with URL params
+  useEffect(() => {
+    if (hasUrlParams) {
+      setAndTags(urlAndTags);
+      setOrTags(urlOrTags);
+      setNotTags(urlNotTags);
+    }
+  }, [andParam, orParam, notParam]);
+
+  // Update URL with search parameters
+  const updateUrlParams = useCallback((and: string[], or: string[], not: string[]) => {
+    const params = new URLSearchParams();
+    if (and.length > 0) params.set('and', and.join(','));
+    if (or.length > 0) params.set('or', or.join(','));
+    if (not.length > 0) params.set('not', not.join(','));
+
+    const newUrl = params.toString() ? `?${params.toString()}` : '/search';
+    router.replace(newUrl, { scroll: false });
+  }, [router]);
 
   const handleAddTag = (tag: string, type: 'and' | 'or' | 'not') => {
     const setters = { and: setAndTags, or: setOrTags, not: setNotTags };
@@ -136,17 +187,8 @@ export default function SearchPage() {
       setInputValue('');
     }
 
-    const query: SearchQuery = {
-      target: ['videos', 'scenes', 'images'],
-      page: 1,
-      limit: 20,
-    };
-
-    if (finalAndTags.length > 0) query.and_tags = finalAndTags;
-    if (finalOrTags.length > 0) query.or_tags = finalOrTags;
-    if (finalNotTags.length > 0) query.not_tags = finalNotTags;
-
-    searchMutation.mutate(query);
+    // Update URL with search parameters - this triggers the useQuery automatically
+    updateUrlParams(finalAndTags, finalOrTags, finalNotTags);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -297,25 +339,25 @@ export default function SearchPage() {
         </button>
       </div>
 
-      {searchMutation.isPending && (
+      {searchLoading && (
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
       )}
 
-      {searchMutation.data && (
+      {searchResults && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">
-              검색 결과 (동영상 {searchMutation.data.total_videos}건, 사진 {searchMutation.data.total_images}건, 장면 {searchMutation.data.total_scenes}건)
+              검색 결과 (동영상 {searchResults.total_videos}건, 사진 {searchResults.total_images}건, 장면 {searchResults.total_scenes}건)
             </h2>
             <button
               onClick={() => {
-                searchMutation.reset();
                 setAndTags([]);
                 setOrTags([]);
                 setNotTags([]);
                 setInputValue('');
+                router.replace('/search', { scroll: false });
               }}
               className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-1"
             >
@@ -324,14 +366,14 @@ export default function SearchPage() {
             </button>
           </div>
 
-          {searchMutation.data.videos.length > 0 && (
+          {searchResults.videos.length > 0 && (
             <div>
               <h3 className="font-medium mb-2 flex items-center gap-2">
                 <Video className="w-4 h-4" />
-                동영상 ({searchMutation.data.videos.length})
+                동영상 ({searchResults.videos.length})
               </h3>
               <div className="space-y-2">
-                {searchMutation.data.videos.map((video) => (
+                {searchResults.videos.map((video) => (
                   <Link
                     key={video.id}
                     href={`/videos/${video.id}`}
@@ -342,7 +384,7 @@ export default function SearchPage() {
                       <p className="text-sm text-gray-500 mt-1 line-clamp-2">{video.summary}</p>
                     )}
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {video.tags.slice(0, 5).map((tag) => (
+                      {video.tags.slice(0, 5).map((tag: string) => (
                         <span key={tag} className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">
                           {tag}
                         </span>
@@ -357,14 +399,14 @@ export default function SearchPage() {
             </div>
           )}
 
-          {searchMutation.data.images && searchMutation.data.images.length > 0 && (
+          {searchResults.images && searchResults.images.length > 0 && (
             <div>
               <h3 className="font-medium mb-2 flex items-center gap-2">
                 <Image className="w-4 h-4" />
-                사진 ({searchMutation.data.images.length})
+                사진 ({searchResults.images.length})
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {searchMutation.data.images.map((image) => (
+                {searchResults.images.map((image) => (
                   <Link
                     key={image.id}
                     href={`/images/${image.id}`}
@@ -386,7 +428,7 @@ export default function SearchPage() {
                     <div className="p-2">
                       <div className="font-medium text-sm truncate">{image.title || image.filename}</div>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {image.tags.slice(0, 3).map((tag) => (
+                        {image.tags.slice(0, 3).map((tag: string) => (
                           <span key={tag} className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">
                             {tag}
                           </span>
@@ -402,17 +444,17 @@ export default function SearchPage() {
             </div>
           )}
 
-          {searchMutation.data.scenes.length > 0 && (
+          {searchResults.scenes.length > 0 && (
             <div>
               <h3 className="font-medium mb-2 flex items-center gap-2">
                 <Film className="w-4 h-4" />
-                장면 ({searchMutation.data.scenes.length})
+                장면 ({searchResults.scenes.length})
               </h3>
               <div className="space-y-2">
-                {searchMutation.data.scenes.map((scene) => (
+                {searchResults.scenes.map((scene) => (
                   <Link
                     key={scene.id}
-                    href={`/videos/${scene.video_id}`}
+                    href={`/videos/${scene.video_id}?scene=${scene.id}`}
                     className="block p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                   >
                     <div className="flex items-center justify-between">
@@ -422,7 +464,7 @@ export default function SearchPage() {
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {scene.tags.map((tag) => (
+                      {scene.tags.map((tag: string) => (
                         <span key={tag} className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">
                           {tag}
                         </span>
@@ -434,7 +476,7 @@ export default function SearchPage() {
             </div>
           )}
 
-          {searchMutation.data.total_videos === 0 && searchMutation.data.total_scenes === 0 && searchMutation.data.total_images === 0 && (
+          {searchResults.total_videos === 0 && searchResults.total_scenes === 0 && searchResults.total_images === 0 && (
             <div className="text-center py-8 text-gray-500">
               검색 결과가 없습니다.
             </div>
@@ -442,5 +484,20 @@ export default function SearchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6">태그 검색</h1>
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      </div>
+    }>
+      <SearchPageContent />
+    </Suspense>
   );
 }

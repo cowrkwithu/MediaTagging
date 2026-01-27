@@ -254,8 +254,11 @@ async def get_video_scenes(video_id: UUID, db: Session = Depends(get_db)):
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
+    # Query scenes explicitly ordered by start_time to ensure chronological order
+    scenes = db.query(Scene).filter(Scene.video_id == video_id).order_by(Scene.start_time).all()
+
     scenes_with_tags = []
-    for scene in video.scenes:
+    for scene in scenes:
         # Get tags for this scene with confidence values
         scene_tag_entries = db.query(SceneTag, Tag).join(Tag).filter(
             SceneTag.scene_id == scene.id
@@ -276,6 +279,7 @@ async def get_video_scenes(video_id: UUID, db: Session = Depends(get_db)):
             "end_time": scene.end_time,
             "thumbnail_path": scene.thumbnail_path,
             "clip_path": scene.clip_path,
+            "user_notes": scene.user_notes,
             "created_at": scene.created_at.isoformat() if scene.created_at else None,
             "tags": tags_list
         })

@@ -1,11 +1,11 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { ArrowLeft, Tag as TagIcon, Trash2, Edit2, Save, X, Download } from 'lucide-react';
 import Link from 'next/link';
-import { getVideo, getScenes, startTagging, deleteVideo, updateVideo } from '@/lib/api';
+import { getVideo, getScenes, startTagging, deleteVideo, updateVideo, updateScene, deleteSceneTag } from '@/lib/api';
 import VideoPlayer, { VideoPlayerRef } from '@/components/VideoPlayer';
 import SceneTimeline from '@/components/SceneTimeline';
 import ProcessingStatus from '@/components/ProcessingStatus';
@@ -24,24 +24,29 @@ interface SceneWithTags {
   end_time: number;
   thumbnail_path: string | null;
   clip_path: string | null;
+  user_notes: string | null;
   created_at: string | null;
   tags: SceneTag[];
 }
 
-export default function VideoDetailPage() {
+function VideoDetailContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const videoId = params.id as string;
+  const sceneIdFromUrl = searchParams.get('scene');
 
   const playerRef = useRef<VideoPlayerRef>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
-  const [editNotes, setEditNotes] = useState('');
+  const [isEditingSummary, setIsEditingSummary] = useState(false);
+  const [editSummary, setEditSummary] = useState('');
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [isEditingTags, setIsEditingTags] = useState(false);
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null); // 편집 중인 장면 ID 저장
   const [userTagsInput, setUserTagsInput] = useState('');
 
   const { data: video, isLoading: videoLoading } = useQuery({
@@ -85,71 +90,149 @@ export default function VideoDetailPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: { title?: string; user_notes?: string }) => updateVideo(videoId, data),
+    mutationFn: (data: { title?: string; summary?: string }) => updateVideo(videoId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['video', videoId] });
       setIsEditing(false);
+      setIsEditingSummary(false);
     },
   });
 
+  const sceneUpdateMutation = useMutation({
+    mutationFn: ({ sceneId, data }: { sceneId: string; data: { user_notes?: string } }) =>
+      updateScene(sceneId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenes', videoId] });
+      setIsEditingTags(false);
+      setEditingSceneId(null);
+      setUserTagsInput('');
+    },
+  });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: ({ sceneId, tagId }: { sceneId: string; tagId: string }) =>
+      deleteSceneTag(sceneId, tagId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenes', videoId] });
+    },
+  });
+
+  const handleDeleteTag = (sceneId: string, tagId: string) => {
+    if (confirm('이 태그를 삭제하시겠습니까?')) {
+      deleteTagMutation.mutate({ sceneId, tagId });
+    }
+  };
+
   const handleStartEdit = () => {
     setEditTitle(video?.title || '');
-    setEditNotes(video?.user_notes || '');
     setIsEditing(true);
   };
 
   const handleSave = () => {
     updateMutation.mutate({
       title: editTitle || undefined,
-      user_notes: editNotes || undefined,
     });
   };
 
-  const handleStartEditTags = () => {
-    setUserTagsInput(video?.user_notes || '');
-    setIsEditingTags(true);
+  const handleStartEditSummary = () => {
+    setEditSummary(video?.summary || '');
+    setIsEditingSummary(true);
   };
 
-  const handleSaveTags = () => {
+  const handleSaveSummary = () => {
     updateMutation.mutate({
-      user_notes: userTagsInput || undefined,
-    }, {
-      onSuccess: () => {
-        setIsEditingTags(false);
-        // Refresh video and scenes to show updated tags
-        queryClient.invalidateQueries({ queryKey: ['video', videoId] });
-        queryClient.invalidateQueries({ queryKey: ['scenes', videoId] });
-      }
+      summary: editSummary || undefined,
     });
   };
 
-  const handleCancelEditTags = () => {
-    setUserTagsInput(video?.user_notes || '');
-    setIsEditingTags(false);
+  const handleCancelEditSummary = () => {
+    setEditSummary(video?.summary || '');
+    setIsEditingSummary(false);
   };
+
+  const handleStartEditSceneTags = () => {
+    if (selectedScene && selectedSceneId) {
+      setEditingSceneId(selectedSceneId); // 편집 시작 시 현재 선택된 장면 ID 저장
+      setUserTagsInput(selectedScene.user_notes || '');
+      setIsEditingTags(true);
+    }
+  };
+
+  const handleSaveSceneTags = () => {
+    if (editingSceneId) { // 저장된 편집 중인 장면 ID 사용
+      sceneUpdateMutation.mutate({
+        sceneId: editingSceneId,
+        data: { user_notes: userTagsInput || undefined },
+      });
+    }
+  };
+
+  const handleCancelEditSceneTags = () => {
+    setUserTagsInput('');
+    setIsEditingTags(false);
+    setEditingSceneId(null);
+  };
+
+  // Ref to track if user explicitly selected a scene (prevents auto-update until cleared)
+  const userExplicitSelectionRef = useRef(false);
+  // Ref to track if initial scene selection from URL has been done
+  const initialSceneSelectionDoneRef = useRef(false);
+
+  // Handle scene selection from URL query parameter
+  useEffect(() => {
+    if (sceneIdFromUrl && scenes?.scenes && !initialSceneSelectionDoneRef.current) {
+      const targetScene = (scenes.scenes as SceneWithTags[]).find(s => s.id === sceneIdFromUrl);
+      if (targetScene) {
+        initialSceneSelectionDoneRef.current = true;
+        userExplicitSelectionRef.current = true;
+        setSelectedSceneId(targetScene.id);
+        // Seek to the scene's start time after a small delay to ensure player is ready
+        setTimeout(() => {
+          playerRef.current?.seekTo(targetScene.start_time);
+        }, 100);
+      }
+    }
+  }, [sceneIdFromUrl, scenes?.scenes]);
 
   const handleSceneClick = useCallback((scene: { id?: string; start_time: number }) => {
     playerRef.current?.seekTo(scene.start_time);
     if (scene.id) {
+      userExplicitSelectionRef.current = true; // User explicitly selected this scene
       setSelectedSceneId(scene.id);
     }
   }, []);
 
+  // Clear explicit selection when user clicks "전체 보기"
+  const handleClearSceneSelection = useCallback(() => {
+    userExplicitSelectionRef.current = false;
+    setSelectedSceneId(null);
+  }, []);
+
   // Find current scene based on playback time
-  const getCurrentScene = useCallback((): SceneWithTags | null => {
+  const currentScene = useMemo((): SceneWithTags | null => {
     if (!scenes?.scenes) return null;
     return (scenes.scenes as SceneWithTags[]).find(
       (scene) => currentTime >= scene.start_time && currentTime < scene.end_time
     ) || null;
   }, [scenes?.scenes, currentTime]);
 
-  // Update selected scene based on current playback time
+  // Update selected scene based on current playback time (only when user hasn't explicitly selected)
   useEffect(() => {
-    const currentScene = getCurrentScene();
+    // Don't auto-update if user explicitly selected a scene
+    if (userExplicitSelectionRef.current) {
+      return;
+    }
+
+    // Don't auto-update while editing tags
+    if (isEditingTags) {
+      return;
+    }
+
+    // Auto-update selection based on playback position
     if (currentScene && currentScene.id !== selectedSceneId) {
       setSelectedSceneId(currentScene.id);
     }
-  }, [getCurrentScene, selectedSceneId]);
+  }, [currentScene, selectedSceneId, isEditingTags]);
 
   // Get the selected scene object
   const selectedScene = selectedSceneId
@@ -188,9 +271,12 @@ export default function VideoDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/videos" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
+        <button
+          onClick={() => router.back()}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+        >
           <ArrowLeft className="w-5 h-5" />
-        </Link>
+        </button>
         <h1 className="text-2xl font-bold flex-1">
           {isEditing ? (
             <input
@@ -253,53 +339,44 @@ export default function VideoDetailPage() {
               scenes={scenes.scenes}
               duration={duration}
               currentTime={currentTime}
+              selectedSceneId={selectedSceneId}
               onSceneClick={handleSceneClick}
             />
           )}
 
-          {video.summary && (
-            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <h3 className="font-medium mb-2">AI 요약</h3>
-              <p className="text-gray-600 dark:text-gray-400">{video.summary}</p>
-            </div>
-          )}
-
-          <div className="p-4 border rounded-lg">
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-medium">사용자 정의 태그</h3>
-              {!isEditingTags && (
+              <h3 className="font-medium">AI 요약</h3>
+              {!isEditingSummary && (
                 <button
-                  onClick={handleStartEditTags}
+                  onClick={handleStartEditSummary}
                   className="text-sm text-blue-600 hover:text-blue-700"
                 >
                   편집
                 </button>
               )}
             </div>
-            {isEditingTags ? (
-              <div className="space-y-3">
+            {isEditingSummary ? (
+              <div className="space-y-2">
                 <textarea
-                  value={userTagsInput}
-                  onChange={(e) => setUserTagsInput(e.target.value)}
-                  placeholder="#태그1 #태그2 형식으로 입력하세요"
-                  rows={3}
+                  value={editSummary}
+                  onChange={(e) => setEditSummary(e.target.value)}
+                  placeholder="동영상 요약을 입력하세요"
+                  rows={4}
                   className="w-full px-3 py-2 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   autoFocus
                 />
-                <p className="text-xs text-gray-500">
-                  #단어 형식으로 입력하면 태그로 추가됩니다
-                </p>
                 <div className="flex gap-2">
                   <button
-                    onClick={handleSaveTags}
+                    onClick={handleSaveSummary}
                     disabled={updateMutation.isPending}
                     className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
                     {updateMutation.isPending ? '저장 중...' : '저장'}
                   </button>
                   <button
-                    onClick={handleCancelEditTags}
-                    className="py-2 px-4 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    onClick={handleCancelEditSummary}
+                    className="py-2 px-4 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     취소
                   </button>
@@ -307,15 +384,13 @@ export default function VideoDetailPage() {
               </div>
             ) : (
               <div
-                onClick={handleStartEditTags}
-                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded p-2 -m-2 transition-colors"
+                onClick={handleStartEditSummary}
+                className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded p-2 -m-2 transition-colors"
               >
-                {video.user_notes ? (
-                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
-                    {video.user_notes}
-                  </p>
+                {video.summary ? (
+                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{video.summary}</p>
                 ) : (
-                  <p className="text-gray-400 text-sm">클릭하여 태그를 추가하세요</p>
+                  <p className="text-gray-400 text-sm">클릭하여 요약을 추가하세요</p>
                 )}
               </div>
             )}
@@ -361,7 +436,7 @@ export default function VideoDetailPage() {
               {selectedScene ? `장면 태그` : '동영상 태그'}
               {selectedScene && (
                 <button
-                  onClick={() => setSelectedSceneId(null)}
+                  onClick={handleClearSceneSelection}
                   className="ml-auto text-xs text-blue-600 hover:underline"
                 >
                   전체 보기
@@ -371,17 +446,19 @@ export default function VideoDetailPage() {
 
             {selectedScene ? (
               // Scene-specific tags
-              <div>
-                <div className="text-xs text-gray-500 mb-2">
+              <div className="space-y-3">
+                <div className="text-xs text-gray-500">
                   장면 {((scenes?.scenes as SceneWithTags[])?.findIndex((s) => s.id === selectedScene.id) ?? 0) + 1}
                   ({selectedScene.start_time.toFixed(1)}s - {selectedScene.end_time.toFixed(1)}s)
                 </div>
+
+                {/* Scene Tags */}
                 {selectedScene.tags && selectedScene.tags.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {selectedScene.tags.map((tag) => (
                       <span
                         key={tag.id}
-                        className={`px-2 py-1 text-xs rounded-full ${
+                        className={`group inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${
                           tag.confidence === 1.0
                             ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
                             : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
@@ -390,12 +467,57 @@ export default function VideoDetailPage() {
                       >
                         {tag.confidence === 1.0 && <span className="mr-0.5">#</span>}
                         {tag.name}
+                        <button
+                          onClick={() => handleDeleteTag(selectedScene.id, tag.id)}
+                          className="ml-0.5 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                          title="태그 삭제"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </span>
                     ))}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-500">태그가 없습니다.</p>
                 )}
+
+                {/* Add Tags */}
+                <div className="pt-2 border-t">
+                  {isEditingTags ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={userTagsInput}
+                        onChange={(e) => setUserTagsInput(e.target.value)}
+                        placeholder="#태그1 #태그2 형식으로 입력"
+                        rows={2}
+                        className="w-full px-2 py-1 text-sm border rounded resize-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        autoFocus
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          onClick={handleSaveSceneTags}
+                          disabled={sceneUpdateMutation.isPending}
+                          className="flex-1 py-1 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50"
+                        >
+                          {sceneUpdateMutation.isPending ? '저장 중...' : '추가'}
+                        </button>
+                        <button
+                          onClick={handleCancelEditSceneTags}
+                          className="py-1 px-2 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleStartEditSceneTags}
+                      className="w-full py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                    >
+                      + 태그 추가
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               // Video-level tags
@@ -418,7 +540,7 @@ export default function VideoDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">태그가 없습니다.</p>
+                  <p className="text-sm text-gray-500">장면을 선택하면 태그를 확인할 수 있습니다.</p>
                 )}
               </div>
             )}
@@ -467,5 +589,17 @@ export default function VideoDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VideoDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    }>
+      <VideoDetailContent />
+    </Suspense>
   );
 }
