@@ -216,7 +216,7 @@ export default function ImageDetailPage() {
 
           <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-medium">AI 설명</h3>
+              <h3 className="font-medium">AI 요약</h3>
               {!isEditingDescription && (
                 <button
                   onClick={handleStartEditDescription}

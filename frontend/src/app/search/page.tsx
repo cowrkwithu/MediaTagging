@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, Video, Film, Tag, X, Image } from 'lucide-react';
+import { Search, Video, Film, Tag, X, Image, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { search, getTags } from '@/lib/api';
+import { search, getTags, deleteTag } from '@/lib/api';
 import type { SearchQuery } from '@/types';
 
 function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [andTags, setAndTags] = useState<string[]>([]);
   const [orTags, setOrTags] = useState<string[]>([]);
@@ -18,10 +19,23 @@ function SearchPageContent() {
   const [inputValue, setInputValue] = useState('');
   const [activeInput, setActiveInput] = useState<'and' | 'or' | 'not'>('and');
 
-  const { data: allTags } = useQuery({
+  const { data: allTags, refetch: refetchTags } = useQuery({
     queryKey: ['tags'],
     queryFn: getTags,
   });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: (tagId: string) => deleteTag(tagId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+    },
+  });
+
+  const handleDeleteTag = (tagId: string, tagName: string) => {
+    if (confirm(`"${tagName}" 태그를 삭제하시겠습니까?\n이 태그가 연결된 모든 동영상, 사진, 장면에서도 제거됩니다.`)) {
+      deleteTagMutation.mutate(tagId);
+    }
+  };
 
   // Get search params from URL
   const andParam = searchParams.get('and');
@@ -286,14 +300,28 @@ function SearchPageContent() {
             <p className="text-xs text-gray-500 mb-2">사용 가능한 태그 ({allTags.length}개)</p>
             <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
               {allTags.map((tag) => (
-                <button
+                <span
                   key={tag.id}
-                  onClick={() => handleAddTag(tag.name, activeInput)}
-                  className="px-2 py-1 text-sm bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                  className="group inline-flex items-center gap-1 px-2 py-1 text-sm bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
-                  {tag.name}
-                  <span className="ml-1 text-xs text-gray-400">({(tag.video_count || 0) + (tag.image_count || 0)})</span>
-                </button>
+                  <button
+                    onClick={() => handleAddTag(tag.name, activeInput)}
+                    className="hover:text-blue-600"
+                  >
+                    {tag.name}
+                    <span className="ml-1 text-xs text-gray-400">({(tag.video_count || 0) + (tag.image_count || 0)})</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteTag(tag.id, tag.name);
+                    }}
+                    className="ml-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition-opacity"
+                    title="태그 삭제"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
               ))}
             </div>
           </div>

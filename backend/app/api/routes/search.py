@@ -321,3 +321,26 @@ async def get_tags(db: Session = Depends(get_db)):
     result.sort(key=lambda x: x.video_count + x.scene_count + x.image_count, reverse=True)
 
     return result
+
+
+from uuid import UUID
+from fastapi import HTTPException
+
+
+@router.delete("/tags/{tag_id}")
+async def delete_tag(tag_id: UUID, db: Session = Depends(get_db)):
+    """Delete a tag and all its associations"""
+    tag = db.query(Tag).filter(Tag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+    # Delete all associations first
+    db.query(VideoTag).filter(VideoTag.tag_id == tag_id).delete()
+    db.query(SceneTag).filter(SceneTag.tag_id == tag_id).delete()
+    db.query(ImageTag).filter(ImageTag.tag_id == tag_id).delete()
+
+    # Delete the tag itself
+    db.delete(tag)
+    db.commit()
+
+    return {"message": "Tag deleted", "tag_id": str(tag_id), "tag_name": tag.name}
