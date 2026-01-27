@@ -4,14 +4,14 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/editVideoTagging"
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/mediatagging"
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma3:27b"
 
     # Storage
-    storage_path: str = "/home/john/editVideoTagging/storage"
+    storage_path: str = "/home/john/mediaTagging/storage"
 
     # Scene Detection
     scene_threshold: float = 20.0  # Lower = more sensitive (detects more scenes)

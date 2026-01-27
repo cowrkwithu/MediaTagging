@@ -7,8 +7,8 @@ from app.api.routes import videos, scenes, images, search, external
 settings = get_settings()
 
 app = FastAPI(
-    title="editVideoTagging API",
-    description="Video tagging and search API",
+    title="MediaTagging API",
+    description="Video and image tagging and search API",
     version="0.1.0",
     debug=settings.debug,
     redirect_slashes=False
@@ -33,7 +33,7 @@ app.include_router(external.router, prefix="/api/external", tags=["external"])
 
 @app.get("/")
 async def root():
-    return {"message": "editVideoTagging API", "version": "0.1.0"}
+    return {"message": "MediaTagging API", "version": "0.1.0"}
 
 
 @app.get("/health")
