@@ -1,0 +1,3 @@
+file '/home/john/editVideoTagging/storage/clips/71019fc3-a253-476f-99ed-d7c195bfc637/scene_bfaa4c36-cf0a-47a2-8ab7-7e016bc89e96.mp4'
+file '/home/john/editVideoTagging/storage/clips/71019fc3-a253-476f-99ed-d7c195bfc637/scene_01e709bc-da98-409c-b985-725a0669dc99.mp4'
+file '/home/john/editVideoTagging/storage/clips/71019fc3-a253-476f-99ed-d7c195bfc637/scene_6cbdaf21-95a7-4a23-9783-6c864fad5aaf.mp4'
