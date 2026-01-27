@@ -31,6 +31,7 @@ class VideoResponse(BaseModel):
     summary: Optional[str] = None
     user_notes: Optional[str] = None
     file_path: str
+    thumbnail_path: Optional[str] = None
     duration: Optional[int] = None
     file_size: Optional[int] = None
     status: str

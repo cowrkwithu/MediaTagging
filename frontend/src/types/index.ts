@@ -11,6 +11,7 @@ export interface Video {
   summary: string | null;
   user_notes: string | null;
   file_path: string;
+  thumbnail_path: string | null;
   duration: number | null;
   file_size: number | null;
   status: VideoStatus;

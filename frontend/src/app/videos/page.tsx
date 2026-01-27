@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Video, Clock, HardDrive, Tag } from 'lucide-react';
 import { getVideos } from '@/lib/api';
 import type { Video as VideoType } from '@/types';
@@ -29,6 +30,7 @@ function formatFileSize(bytes: number | null): string {
 
 function VideoCard({ video }: { video: VideoType }) {
   const status = statusLabels[video.status] || statusLabels.uploaded;
+  const thumbnailUrl = video.thumbnail_path ? `/api/videos/${video.id}/thumbnail` : null;
 
   return (
     <Link
@@ -36,9 +38,21 @@ function VideoCard({ video }: { video: VideoType }) {
       className="block p-4 border rounded-lg hover:shadow-lg transition-shadow"
     >
       <div className="flex items-start gap-4">
-        <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-          <Video className="w-8 h-8 text-gray-600 dark:text-gray-400" />
-        </div>
+        {thumbnailUrl ? (
+          <div className="relative w-32 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+            <Image
+              src={thumbnailUrl}
+              alt={video.title || video.filename}
+              fill
+              className="object-cover"
+              sizes="128px"
+            />
+          </div>
+        ) : (
+          <div className="w-32 h-20 flex-shrink-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <Video className="w-8 h-8 text-gray-600 dark:text-gray-400" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-medium truncate">

@@ -23,6 +23,8 @@ ALLOWED_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.flv'}
 
 def video_to_response(video: Video, db: Session) -> dict:
     """Convert Video model to response dict with resolved tags"""
+    from app.models.scene import Scene
+
     # Get tag names for this video
     tags = []
     for video_tag in video.tags:
@@ -34,6 +36,10 @@ def video_to_response(video: Video, db: Session) -> dict:
                 confidence=video_tag.confidence
             ))
 
+    # Get the first scene's thumbnail as the video thumbnail
+    first_scene = db.query(Scene).filter(Scene.video_id == video.id).order_by(Scene.start_time).first()
+    thumbnail_path = first_scene.thumbnail_path if first_scene else None
+
     return {
         "id": video.id,
         "filename": video.filename,
@@ -41,6 +47,7 @@ def video_to_response(video: Video, db: Session) -> dict:
         "summary": video.summary,
         "user_notes": video.user_notes,
         "file_path": video.file_path,
+        "thumbnail_path": thumbnail_path,
         "duration": video.duration,
         "file_size": video.file_size,
         "status": video.status,
@@ -285,6 +292,26 @@ async def get_video_scenes(video_id: UUID, db: Session = Depends(get_db)):
         })
 
     return {"video_id": str(video_id), "scenes": scenes_with_tags}
+
+
+@router.get("/{video_id}/thumbnail")
+async def get_video_thumbnail(video_id: UUID, db: Session = Depends(get_db)):
+    """Get video thumbnail (first scene's thumbnail)"""
+    from app.models.scene import Scene
+
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Get first scene's thumbnail
+    first_scene = db.query(Scene).filter(Scene.video_id == video_id).order_by(Scene.start_time).first()
+    if not first_scene or not first_scene.thumbnail_path:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+    if not os.path.exists(first_scene.thumbnail_path):
+        raise HTTPException(status_code=404, detail="Thumbnail file not found")
+
+    return FileResponse(first_scene.thumbnail_path, media_type="image/jpeg")
 
 
 @router.get("/{video_id}/stream")
