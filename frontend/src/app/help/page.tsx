@@ -85,7 +85,7 @@ export default function HelpPage() {
           <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300">
             <li>업로드된 모든 동영상이 카드 형태로 표시됩니다.</li>
             <li>각 카드에는 썸네일, 제목, 상태, 재생 시간이 표시됩니다.</li>
-            <li>상태 배지: <span className="px-2 py-0.5 bg-gray-200 rounded text-xs">업로드됨</span>, <span className="px-2 py-0.5 bg-blue-200 rounded text-xs">처리 중</span>, <span className="px-2 py-0.5 bg-green-200 rounded text-xs">태깅 완료</span></li>
+            <li>상태 배지: <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-100 rounded text-xs font-medium">업로드됨</span>, <span className="px-2 py-0.5 bg-blue-200 dark:bg-blue-700 text-blue-700 dark:text-blue-100 rounded text-xs font-medium">처리 중</span>, <span className="px-2 py-0.5 bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-100 rounded text-xs font-medium">태깅 완료</span></li>
           </ul>
 
           <h4 className="font-semibold text-lg mt-6">동영상 상세 페이지</h4>
